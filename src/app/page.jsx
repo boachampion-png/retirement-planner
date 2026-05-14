@@ -374,7 +374,7 @@ const TAX_STRATS=[
   {id:'optimized', label:'Bracket Blend',   sub:'0% LTCG cap + Roth ladder',   accent:'#4a9fe6'},
   {id:'aggressive',label:'Aggressive Roth', sub:'Fill 24% bracket · brok tax', accent:'#f97316'},
 ];
-const getAcctC = (t) => ({k401:"#e6b84a",roth:"#4a9fe6",brokerage:"#4ae6a0",crypto:"#e64a6e"});
+const ACCT_C={k401:'#e6b84a',roth:'#4a9fe6',brokerage:'#4ae6a0',crypto:'#e64a6e'};
 
 // ══════════════════════════════════════════════════════════════
 // PHASE 1 COMPONENT
