@@ -6,13 +6,39 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 // RESPONSIVE HOOK
 // ══════════════════════════════════════════════════════════════
 function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth < 768 : false
-  );
+  const getIsMobile = () => {
+    if (typeof window === 'undefined') return false;
+    const w = window.innerWidth, h = window.innerHeight;
+    return w < 768 || (w < 1024 && h < 500);
+  };
+  const [isMobile, setIsMobile] = useState(getIsMobile);
   useEffect(() => {
-    const fn = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', fn);
-    return () => window.removeEventListener('resize', fn);
+    const update = () => setIsMobile(getIsMobile());
+
+    // resize is reliable on most browsers
+    window.addEventListener('resize', update);
+
+    // orientationchange on iOS fires BEFORE dimensions update
+    // poll a few times after it fires to catch the final value
+    const onOrient = () => {
+      update();
+      const delays = [100, 250, 500, 800];
+      delays.forEach(d => setTimeout(update, d));
+    };
+    window.addEventListener('orientationchange', onOrient);
+
+    // Also use ResizeObserver on document.body for maximum reliability
+    let ro;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(update);
+      ro.observe(document.body);
+    }
+
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', onOrient);
+      if (ro) ro.disconnect();
+    };
   }, []);
   return isMobile;
 }
@@ -29,8 +55,9 @@ function Inp({ value, onChange, prefix, suffix, step=100, min=0 }) {
     <div style={{ position:"relative" }}>
       {prefix && <span style={{ position:"absolute", left:7, top:"50%", transform:"translateY(-50%)", color:"#6e7681", fontSize:11, pointerEvents:"none", zIndex:1 }}>{prefix}</span>}
       <input type="number" value={value} step={step} min={min} onChange={e => onChange(Number(e.target.value))}
-        style={{ width:"100%", background:"#080c10", border:"1px solid #21262d", borderRadius:3,
-                 color:"#e6b84a", fontFamily:"'DM Mono',monospace", fontSize:14,
+        onFocus={e => e.target.select()}
+        style={{ width:"100%", background:"#080c10", border:`1px solid ${"#21262d"}`, borderRadius:3,
+                 color:"#e6b84a", fontFamily:"'DM Mono',monospace", fontSize:16,
                  padding: prefix ? "8px 6px 8px 18px" : suffix ? "8px 22px 8px 6px" : "8px 6px", outline:"none",
                  WebkitAppearance:"none", touchAction:"manipulation" }} />
       {suffix && <span style={{ position:"absolute", right:7, top:"50%", transform:"translateY(-50%)", color:"#6e7681", fontSize:11, pointerEvents:"none" }}>{suffix}</span>}
@@ -46,8 +73,9 @@ function Field({ label, value, onChange, prefix="$", step=1000, min=0, hint, dis
         {prefix && <span style={{ position:"absolute", left:8, top:"50%", transform:"translateY(-50%)", color:"#6e7681", fontSize:12, pointerEvents:"none", zIndex:1 }}>{prefix}</span>}
         <input type="number" value={value} step={step} min={min} disabled={disabled}
           onChange={e => onChange(Number(e.target.value))}
-          style={{ width:"100%", background: disabled ? "#060809" : "#0a0e12", border:"1px solid #30363d", borderRadius:4,
-                   color: disabled ? "#4d5563" : "#e6b84a", fontFamily:"'DM Mono',monospace", fontSize:14,
+          onFocus={e => e.target.select()}
+          style={{ width:"100%", background: disabled ? "#060809" : "#0a0e12", border:`1px solid ${"#30363d"}`, borderRadius:4,
+                   color: disabled ? "#3d444d" : "#e6b84a", fontFamily:"'DM Mono',monospace", fontSize:16,
                    padding: prefix ? "10px 8px 10px 20px" : "10px 8px", outline:"none",
                    WebkitAppearance:"none", touchAction:"manipulation" }} />
       </div>
@@ -57,13 +85,13 @@ function Field({ label, value, onChange, prefix="$", step=1000, min=0, hint, dis
 }
 
 const ChartTip = ({ active, payload, label, showTotal=true }) => {
-  if (!active || !payload?.length) return null;
+  if (!active || !payload || !payload.length) return null;
   const tot = payload.reduce((a, b) => a + b.value, 0);
   return (
-    <div style={{ background:"#0d1117", border:"1px solid #30363d", borderRadius:5, padding:"10px 14px", fontSize:11, fontFamily:"DM Mono,monospace" }}>
+    <div style={{ background:"#0a0e12", border:`1px solid ${"#30363d"}`, borderRadius:5, padding:"10px 14px", fontSize:11, fontFamily:"DM Mono,monospace" }}>
       <div style={{ color:"#e6b84a", marginBottom:7 }}>Age {label}</div>
       {[...payload].reverse().map(p => <div key={p.name} style={{ color:p.color||p.stroke, marginBottom:2 }}>{p.name}: {$M(p.value)}</div>)}
-      {showTotal && <div style={{ borderTop:"1px solid #30363d", marginTop:6, paddingTop:6, color:"#f0f6fc", fontWeight:500 }}>Total: {$M(tot)}</div>}
+      {showTotal && <div style={{ borderTop:`1px solid ${"#30363d"}`, marginTop:6, paddingTop:6, color:"#f0f6fc", fontWeight:500 }}>Total: {$M(tot)}</div>}
     </div>
   );
 };
@@ -78,7 +106,7 @@ const BUCKET_DEFS = [
   { id:"brok",   label:"Brokerage", icon:"◆", color:"#4ae6a0" },
   { id:"crypto", label:"Crypto",    icon:"◈", color:"#e64a6e" },
   { id:"s529a",  label:"529 Kid 1", icon:"◈", color:"#f97316" },
-  { id:"s529b",  label:"529 Kid 2", icon:"◈", color:"#fb923c" },
+  { id:"s529b",  label:"529 Kid 2", icon:"◈", color:"#f97316" },
 ];
 
 const mkC = (wA=0,wS=43,wE=55, mA=0,mS=43,mE=55, aA=0,aS=43,aE=55) => ({
@@ -88,13 +116,13 @@ const mkC = (wA=0,wS=43,wE=55, mA=0,mS=43,mE=55, aA=0,aS=43,aE=55) => ({
 });
 
 const DEFAULT_BUCKETS = {
-  cash:   { balance:0,         growthRate:2, basisPct:100, contrib: mkC() },
-  k401:   { balance:1_100_000, growthRate:7, basisPct:0,   contrib: mkC(0,43,55, 0,43,55, 55000,43,55) },
-  roth:   { balance:44_000,    growthRate:7, basisPct:100, contrib: mkC(0,43,55, 1250,43,55, 0,43,55) },
-  brok:   { balance:300_000,   growthRate:7, basisPct:63,  contrib: mkC(1400,43,55, 1800,46,55, 50000,51,55) },
-  crypto: { balance:23_000,    growthRate:7, basisPct:50,  contrib: mkC(0,43,55, 0,43,55, 0,43,55) },
-  s529a:  { balance:0,         growthRate:6, basisPct:100, contrib: mkC(0,43,55, 0,43,55, 0,43,55) },
-  s529b:  { balance:0,         growthRate:6, basisPct:100, contrib: mkC(0,43,55, 0,43,55, 0,43,55) },
+  cash:   { balance:0, growthRate:2, basisPct:100, contrib: mkC() },
+  k401:   { balance:0, growthRate:7, basisPct:0,   contrib: mkC() },
+  roth:   { balance:0, growthRate:7, basisPct:100, contrib: mkC() },
+  brok:   { balance:0, growthRate:7, basisPct:100, contrib: mkC() },
+  crypto: { balance:0, growthRate:7, basisPct:100, contrib: mkC() },
+  s529a:  { balance:0, growthRate:6, basisPct:100, contrib: mkC() },
+  s529b:  { balance:0, growthRate:6, basisPct:100, contrib: mkC() },
 };
 
 function accumSimulate(buckets, currentAge, retireAge, lumpSums={}) {
@@ -113,9 +141,9 @@ function accumSimulate(buckets, currentAge, retireAge, lumpSums={}) {
       const r  = bk.growthRate / 100;
       const c  = bk.contrib;
       let contrib = 0;
-      if (age >= c.weekly.startAge   && age <= (c.weekly.endAge  ??99) && c.weekly.amt   > 0) contrib += c.weekly.amt   * 52;
-      if (age >= c.monthly.startAge  && age <= (c.monthly.endAge ??99) && c.monthly.amt  > 0) contrib += c.monthly.amt  * 12;
-      if (age >= c.annually.startAge && age <= (c.annually.endAge??99) && c.annually.amt > 0) contrib += c.annually.amt;
+      if (age >= c.weekly.startAge   && age <= (c.weekly.endAge  ||99) && c.weekly.amt   > 0) contrib += c.weekly.amt   * 52;
+      if (age >= c.monthly.startAge  && age <= (c.monthly.endAge ||99) && c.monthly.amt  > 0) contrib += c.monthly.amt  * 12;
+      if (age >= c.annually.startAge && age <= (c.annually.endAge||99) && c.annually.amt > 0) contrib += c.annually.amt;
       if (id === 'brok') contrib += lump;
       nextBals[id]  = bals[id]  * (1+r) + contrib * (1+r/2);
       nextBases[id] = bases[id] + contrib; // contributions are 100% basis
@@ -148,7 +176,7 @@ function BucketCard({ def, data, onChange, showAll, isMobile=false }) {
     onChange(next);
   };
   return (
-    <div style={{ background:"#0d1117", border:"1px solid #21262d", borderTop:`2px solid ${def.color}`, borderRadius:6, overflow:"hidden" }}>
+    <div style={{ background:"#0a0e12", border:`1px solid ${"#21262d"}`, borderTop:`2px solid ${def.color}`, borderRadius:6, overflow:"hidden" }}>
       <button onClick={() => setOpen(v=>!v)} style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"9px 13px", background:"transparent", border:"none", cursor:"pointer", fontFamily:"'DM Mono',monospace" }}>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
           <span style={{ color:def.color }}>{def.icon}</span>
@@ -158,7 +186,7 @@ function BucketCard({ def, data, onChange, showAll, isMobile=false }) {
         <span style={{ color:"#6e7681", fontSize:10 }}>{open?"▲":"▼"}</span>
       </button>
       {open && (
-        <div style={{ padding:"0 13px 13px", borderTop:"1px solid #161b22" }}>
+        <div style={{ padding:"0 13px 13px", borderTop:`1px solid ${"#161b22"}` }}>
           <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap:8, marginTop:10, marginBottom:10 }}>
             <div><div style={{ fontSize:8, color:"#6e7681", marginBottom:3 }}>BALANCE</div><Inp value={data.balance} onChange={v=>set("balance",v)} prefix="$" step={1000}/></div>
             <div><div style={{ fontSize:8, color:"#6e7681", marginBottom:3 }}>GROWTH %</div><Inp value={data.growthRate} onChange={v=>set("growthRate",v)} suffix="%" step={0.5}/></div>
@@ -170,10 +198,10 @@ function BucketCard({ def, data, onChange, showAll, isMobile=false }) {
             {["AMOUNT","START","END"].map(h=><div key={h} style={{ fontSize:8, color:"#3d444d", textAlign:"center" }}>{h}</div>)}
             {[{key:"weekly",lbl:"Weekly"},{key:"monthly",lbl:"Monthly"},{key:"annually",lbl:"Annual"}].map(({key,lbl})=>(
               <React.Fragment key={key}>
-                <div style={{ fontSize:9, color:"#8b949e" }}>{lbl}</div>
+                <div style={{ fontSize:9, color:"#6e7681" }}>{lbl}</div>
                 <Inp value={data.contrib[key].amt}      onChange={v=>set(`contrib.${key}.amt`,v)}      prefix="$" step={key==="annually"?1000:50}/>
                 <Inp value={data.contrib[key].startAge} onChange={v=>set(`contrib.${key}.startAge`,v)} step={1} min={0}/>
-                <Inp value={data.contrib[key].endAge??55} onChange={v=>set(`contrib.${key}.endAge`,v)} step={1} min={0}/>
+                <Inp value={data.contrib[key].endAge||55} onChange={v=>set(`contrib.${key}.endAge`,v)} step={1} min={0}/>
               </React.Fragment>
             ))}
           </div>
@@ -209,7 +237,32 @@ function simPath(strat, cfg, overrides=null) {
   const {k401Init,rothInit,brokInit,cryptoInit,brokBasisPct,withdrawal,inflation,growth,ssAmount,ssStartAge,retireAge=55} = cfg;
   let k401=k401Init,roth=rothInit,brok=brokInit,bBasis=brok*(brokBasisPct/100),crypto=cryptoInit;
   const rows=[];
-  const dynCeiling=g=>Math.min(94300,Math.max(0,96700-g));
+  const isMC = overrides !== null;
+
+  // Tax-aware helpers — brackets inflate at 2.5%/yr to reflect real-world adjustments
+  // In MC paths we apply this dynamically so bull/bear scenarios have correct bracket positions
+  const bracketInflate = (y) => isMC ? Math.pow(1.025, y) : 1;
+
+  const taxCalcInflated = (ord, gains, y) => {
+    const bi = bracketInflate(y);
+    const std = STD_DED * bi;
+    const ot = Math.max(0, ord - std);
+    // Inflated ordinary brackets
+    const bands=[[23200,.10],[71100,.12],[106750,.22],[182850,.24],[Infinity,.32]];
+    let tax=0,rem=ot;
+    for(const[w,r] of bands){if(rem<=0)break;const a=Math.min(rem,w*bi);tax+=a*r;rem-=a;}
+    // Inflated LTCG brackets
+    let ltcg=0;
+    if(gains>0){
+      const at0=Math.min(gains,Math.max(0,96700*bi-ot));
+      const at15=Math.min(gains-at0,487050*bi);
+      ltcg=at15*.15+Math.max(0,gains-at0-at15)*.20;
+    }
+    const ceiling0 = Math.min(94300*bi, Math.max(0,96700*bi-gains));
+    return {ordTaxable:ot, total:tax+ltcg, ceiling0};
+  };
+
+  const dynCeiling=(g,y)=>Math.min(94300*bracketInflate(y),Math.max(0,96700*bracketInflate(y)-g));
 
   for(let y=0;y<36;y++){
     const age=retireAge+y;
@@ -224,33 +277,39 @@ function simPath(strat, cfg, overrides=null) {
 
     if(strat==='brokFirst'){
       wBrok=Math.min(need,brok);wRoth=Math.min(need-wBrok,roth);w401=Math.min(need-wBrok-wRoth,k401);
-      const g0=wBrok*gR;const{ordTaxable}=taxCalc(w401+ssTx,g0);
-      conv=Math.min(Math.max(0,dynCeiling(g0)-ordTaxable),k401-w401);
+      const g0=wBrok*gR;const{ordTaxable}=taxCalcInflated(w401+ssTx,g0,y);
+      conv=Math.min(Math.max(0,dynCeiling(g0,y)-ordTaxable),k401-w401);
     } else if(strat==='rule55'){
       w401=Math.min(need,k401);wBrok=Math.min(need-w401,brok);wRoth=Math.min(need-w401-wBrok,roth);
     } else if(strat==='aggressive'){
       wBrok=Math.min(need,brok);wRoth=Math.min(need-wBrok,roth);w401=Math.min(need-wBrok-wRoth,k401);
-      const g0=wBrok*gR;const{ordTaxable:ot0}=taxCalc(w401+ssTx,g0);
-      conv=Math.min(Math.max(0,383900-ot0),k401-w401);
-      const tW=taxCalc(w401+conv+ssTx,g0).total,tWo=taxCalc(w401+ssTx,g0).total;
+      const g0=wBrok*gR;const{ordTaxable:ot0}=taxCalcInflated(w401+ssTx,g0,y);
+      conv=Math.min(Math.max(0,383900*bracketInflate(y)-ot0),k401-w401);
+      const tW=taxCalcInflated(w401+conv+ssTx,g0,y).total,tWo=taxCalcInflated(w401+ssTx,g0,y).total;
       const cte=Math.max(0,tW-tWo),ab=Math.min(cte,brok-wBrok);
       wBrok+=ab;if(ab<cte&&cte>0)conv=conv*(ab/cte);
     } else {
-      const mb=gR>0?Math.min(96700/gR,brok,need):Math.min(brok,need);
+      const mb=gR>0?Math.min(96700*bracketInflate(y)/gR,brok,need):Math.min(brok,need);
       wBrok=mb;wRoth=Math.min(need-wBrok,roth);w401=Math.min(need-wBrok-wRoth,k401);
-      const g0=wBrok*gR;const{ordTaxable}=taxCalc(w401+ssTx,g0);
-      conv=Math.min(Math.max(0,dynCeiling(g0)-ordTaxable),k401-w401);
+      const g0=wBrok*gR;const{ordTaxable}=taxCalcInflated(w401+ssTx,g0,y);
+      conv=Math.min(Math.max(0,dynCeiling(g0,y)-ordTaxable),k401-w401);
     }
 
     const rmdShortfall=Math.max(0,rmdRequired-w401-conv);
-    const rmdExTax=rmdShortfall>0?taxCalc(w401+conv+rmdShortfall+ssTx,0).total-taxCalc(w401+conv+ssTx,0).total:0;
+    const rmdExTax=rmdShortfall>0
+      ?taxCalcInflated(w401+conv+rmdShortfall+ssTx,0,y).total-taxCalcInflated(w401+conv+ssTx,0,y).total
+      :0;
     const rmdNet=Math.max(0,rmdShortfall-rmdExTax);
     w401=Math.min(w401+rmdShortfall,k401-conv);
 
     const gains=wBrok*gR,basisWdr=wBrok*(1-gR);
-    const tFull=taxCalc(w401+conv+ssTx,gains),tLiving=taxCalc(w401+ssTx,gains);
+    const tFull=taxCalcInflated(w401+conv+ssTx,gains,y);
+    const tLiving=taxCalcInflated(w401+ssTx,gains,y);
     const convTax=tFull.total-tLiving.total;
     const isRmd=rmdRequired>100;
+
+    // Net income after tax — survival check uses this
+    const netIncome = grossSpend - tLiving.total;
 
     k401   = Math.max(0,k401-w401-conv-convTax)*(1+gr);
     roth   = (Math.max(0,roth-wRoth)+conv)*(1+gr);
@@ -264,7 +323,7 @@ function simPath(strat, cfg, overrides=null) {
       gains:Math.round(gains),conv:Math.round(conv),convTax:Math.round(convTax),
       rmd:Math.round(rmdRequired),livingTax:Math.round(tLiving.total),
       effRate:grossSpend>0?tLiving.total/grossSpend:0,
-      netIncome:Math.round(grossSpend-tLiving.total),
+      netIncome:Math.round(netIncome),
       k401:Math.round(k401),roth:Math.round(roth),
       brokerage:Math.round(brok),brokBasis:Math.round(bBasis),crypto:Math.round(crypto),
       total:Math.round(total),isRmd});
@@ -278,13 +337,35 @@ function runMC(strat,cfg,nSims=600){
   const retAge=cfg.retireAge||55;
   const ages=Array.from({length:36},(_,i)=>retAge+i);
   const byAge=Object.fromEntries(ages.map(a=>[a,[]]));
+
   for(let s=0;s<nSims;s++){
     const ov=Array.from({length:36},()=>randNorm(meanR,sd));
-    for(const r of simPath(strat,cfg,ov)) if(byAge[r.age]) byAge[r.age].push(r.total);
+    const pathRows=simPath(strat,cfg,ov);
+    const lastAge=pathRows.length?pathRows[pathRows.length-1].age:retAge;
+    // Record each age that ran
+    for(const r of pathRows) if(byAge[r.age]) byAge[r.age].push(r.total);
+    // If path ended early (depleted), fill remaining ages with 0
+    for(const a of ages){
+      if(a>lastAge) byAge[a].push(0);
+    }
   }
-  const pp=(arr,p)=>{if(!arr.length)return 0;const s=[...arr].sort((a,b)=>a-b);return s[Math.floor(p/100*(s.length-1))];};
-  const surv90=1-(byAge[retAge+35]?.filter(v=>v<50000).length||0)/nSims;
-  return{fan:ages.map(a=>({age:a,p10:pp(byAge[a]||[],10),p25:pp(byAge[a]||[],25),p50:pp(byAge[a]||[],50),p75:pp(byAge[a]||[],75),p90:pp(byAge[a]||[],90)})),surv90,nSims};
+
+  const pp=(arr,p)=>{
+    if(!arr.length)return 0;
+    const s=[...arr].sort((a,b)=>a-b);
+    return s[Math.floor(p/100*(s.length-1))];
+  };
+  // Survival = % of sims that end with >$50k at the final age
+  const finalAge=retAge+35;
+  const finalArr=byAge[finalAge]||[];
+  const surv90=finalArr.length?finalArr.filter(v=>v>=50000).length/nSims:0;
+
+  return{
+    fan:ages.map(a=>({age:a,
+      p10:pp(byAge[a],10),p25:pp(byAge[a],25),p50:pp(byAge[a],50),
+      p75:pp(byAge[a],75),p90:pp(byAge[a],90)})),
+    surv90,nSims
+  };
 }
 
 const TAX_STRATS=[
@@ -293,7 +374,7 @@ const TAX_STRATS=[
   {id:'optimized', label:'Bracket Blend',   sub:'0% LTCG cap + Roth ladder',   accent:'#4a9fe6'},
   {id:'aggressive',label:'Aggressive Roth', sub:'Fill 24% bracket · brok tax', accent:'#f97316'},
 ];
-const ACCT_C={k401:'#e6b84a',roth:'#4a9fe6',brokerage:'#4ae6a0',crypto:'#e64a6e'};
+const getAcctC = (t) => ({k401:"#e6b84a",roth:"#4a9fe6",brokerage:"#4ae6a0",crypto:"#e64a6e"});
 
 // ══════════════════════════════════════════════════════════════
 // PHASE 1 COMPONENT
@@ -341,9 +422,9 @@ function AccumulationPhase({ initialState, onStateChange }) {
   const totalLumps  = Object.values(lumpSums).reduce((s,v)=>s+(v||0),0);
   const annualC     = BUCKET_DEFS.reduce((s,b)=>{
     const c=buckets[b.id].contrib; let a=0;
-    if(currentAge>=c.weekly.startAge   &&currentAge<=(c.weekly.endAge??99))   a+=c.weekly.amt*52;
-    if(currentAge>=c.monthly.startAge  &&currentAge<=(c.monthly.endAge??99))  a+=c.monthly.amt*12;
-    if(currentAge>=c.annually.startAge &&currentAge<=(c.annually.endAge??99)) a+=c.annually.amt;
+    if(currentAge>=c.weekly.startAge   &&currentAge<=(c.weekly.endAge||99))   a+=c.weekly.amt*52;
+    if(currentAge>=c.monthly.startAge  &&currentAge<=(c.monthly.endAge||99))  a+=c.monthly.amt*12;
+    if(currentAge>=c.annually.startAge &&currentAge<=(c.annually.endAge||99)) a+=c.annually.amt;
     return s+a;
   },0);
 
@@ -354,7 +435,7 @@ function AccumulationPhase({ initialState, onStateChange }) {
     <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "310px 1fr", gap:16 }}>
       {/* Left */}
       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-        <div style={{ background:"#0d1117", border:"1px solid #21262d", borderRadius:6, padding:"13px 14px" }}>
+        <div style={{ background:"#0a0e12", border:`1px solid ${"#21262d"}`, borderRadius:6, padding:"13px 14px" }}>
           <div style={{ fontSize:9, color:"#6e7681", letterSpacing:".1em", marginBottom:10 }}>TIMELINE</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
             {[{l:"CURRENT AGE",v:currentAge,f:handleCurrentAge,m:18},{l:"RETIRE AGE",v:retireAge,f:handleRetireAge,m:currentAge+1}].map(({l,v,f,m})=>(
@@ -369,7 +450,7 @@ function AccumulationPhase({ initialState, onStateChange }) {
 
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div style={{ fontSize:9, color:"#6e7681", letterSpacing:".08em" }}>BUCKETS</div>
-          <button onClick={toggleAll} style={{ cursor:"pointer", background:"transparent", border:"1px solid #21262d", borderRadius:3, color:"#6e7681", fontFamily:"'DM Mono',monospace", fontSize:9, padding:"2px 9px" }}>
+          <button onClick={toggleAll} style={{ cursor:"pointer", background:"transparent", border:`1px solid ${"#21262d"}`, borderRadius:3, color:"#6e7681", fontFamily:"'DM Mono',monospace", fontSize:9, padding:"2px 9px" }}>
             {showAll?"Collapse all":"Expand all"}
           </button>
         </div>
@@ -379,7 +460,7 @@ function AccumulationPhase({ initialState, onStateChange }) {
         ))}
 
         {/* Lump sums */}
-        <div style={{ background:"#0d1117", border:"1px solid #21262d", borderTop:"2px solid #a78bfa", borderRadius:6, overflow:"hidden" }}>
+        <div style={{ background:"#0a0e12", border:`1px solid ${"#21262d"}`, borderTop:"2px solid #a78bfa", borderRadius:6, overflow:"hidden" }}>
           <button onClick={()=>set('lumpOpen',!lumpOpen)} style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"9px 13px", background:"transparent", border:"none", cursor:"pointer", fontFamily:"'DM Mono',monospace" }}>
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
               <span style={{color:"#a78bfa"}}>◈</span>
@@ -389,13 +470,13 @@ function AccumulationPhase({ initialState, onStateChange }) {
             <span style={{color:"#6e7681",fontSize:10}}>{lumpOpen?"▲":"▼"}</span>
           </button>
           {lumpOpen && (
-            <div style={{ padding:"0 13px 13px", borderTop:"1px solid #161b22" }}>
+            <div style={{ padding:"0 13px 13px", borderTop:`1px solid ${"#161b22"}` }}>
               <div style={{ fontSize:8, color:"#6e7681", margin:"9px 0 7px", letterSpacing:".08em" }}>ONE-TIME INFLOWS → Brokerage</div>
-              <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:9, padding:"7px 9px", background:"#080c10", borderRadius:3, border:"1px solid #21262d" }}>
+              <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:9, padding:"7px 9px", background:"#080c10", borderRadius:3, border:`1px solid ${"#21262d"}` }}>
                 <div style={{fontSize:9,color:"#6e7681",whiteSpace:"nowrap"}}>FILL ALL</div>
                 <Inp value={fillAmt} onChange={setFillAmt} prefix="$" step={1000}/>
                 <button onClick={applyFill} style={{cursor:"pointer",background:"#a78bfa22",border:"1px solid #a78bfa66",borderRadius:3,color:"#a78bfa",fontFamily:"'DM Mono',monospace",fontSize:10,padding:"3px 9px",whiteSpace:"nowrap",flexShrink:0}}>Apply</button>
-                <button onClick={clearLumps} style={{cursor:"pointer",background:"transparent",border:"1px solid #30363d",borderRadius:3,color:"#6e7681",fontFamily:"'DM Mono',monospace",fontSize:10,padding:"3px 9px",whiteSpace:"nowrap",flexShrink:0}}>Clear</button>
+                <button onClick={clearLumps} style={{cursor:"pointer",background:"transparent",border:`1px solid ${"#30363d"}`,borderRadius:3,color:"#6e7681",fontFamily:"'DM Mono',monospace",fontSize:10,padding:"3px 9px",whiteSpace:"nowrap",flexShrink:0}}>Clear</button>
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"3px 8px", alignItems:"center" }}>
                 <div style={{fontSize:8,color:"#3d444d"}}>AGE</div>
@@ -413,7 +494,7 @@ function AccumulationPhase({ initialState, onStateChange }) {
       </div>
 
       {/* Right */}
-      <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+      <div style={{ display:"flex", flexDirection:"column", gap:12, minWidth:0, overflow:"hidden" }}>
         <div style={{ display:"grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(5,1fr)", gap:8 }}>
           {[
             {l:"TODAY",           v:$M(totalNow),                                              sub:"starting portfolio",       c:"#e6b84a"},
@@ -422,7 +503,7 @@ function AccumulationPhase({ initialState, onStateChange }) {
             {l:"GROWTH",          v:$M(totalRetire-totalNow-(annualC*(retireAge-currentAge))-totalLumps), sub:"investment return", c:"#a78bfa"},
             {l:"TOTAL CONTRIB",   v:$M(annualC*(retireAge-currentAge)+totalLumps),             sub:`periodic + ${$M(totalLumps)} lump`, c:"#f97316"},
           ].map((k,i)=>(
-            <div key={i} style={{background:"#0d1117",border:"1px solid #21262d",borderTop:`2px solid ${k.c}`,borderRadius:6,padding:"11px 13px"}}>
+            <div key={i} style={{background:"#0a0e12",border:`1px solid ${"#21262d"}`,borderTop:`2px solid ${k.c}`,borderRadius:6,padding:"11px 13px"}}>
               <div style={{fontSize:9,color:"#6e7681",letterSpacing:".08em",marginBottom:5}}>{k.l}</div>
               <div style={{fontSize:16,color:k.c,fontWeight:500}}>{k.v}</div>
               <div style={{fontSize:9,color:"#6e7681",marginTop:2}}>{k.sub}</div>
@@ -431,7 +512,7 @@ function AccumulationPhase({ initialState, onStateChange }) {
         </div>
 
         {/* Bucket balances at retire */}
-        <div style={{background:"#0d1117",border:"1px solid #21262d",borderRadius:6,padding:"12px 14px"}}>
+        <div style={{background:"#0a0e12",border:`1px solid ${"#21262d"}`,borderRadius:6,padding:"12px 14px"}}>
           <div style={{fontSize:9,color:"#6e7681",letterSpacing:".09em",marginBottom:10}}>BALANCES AT RETIREMENT (AGE {retireAge})</div>
           <div style={{display:"grid",gridTemplateColumns: isMobile ? "repeat(4,1fr)" : "repeat(7,1fr)",gap:6}}>
             {BUCKET_DEFS.map(b=>(
@@ -446,14 +527,14 @@ function AccumulationPhase({ initialState, onStateChange }) {
 
         <div style={{display:"flex",gap:7}}>
           {[["chart","Growth Chart"],["table","Year-by-Year"]].map(([id,lbl])=>(
-            <button key={id} onClick={()=>setTab(id)} style={{cursor:"pointer",borderRadius:4,fontFamily:"'DM Mono',monospace",padding:"4px 12px",fontSize:11,border:"1px solid #30363d",background:tab===id?"#e6b84a11":"transparent",color:tab===id?"#e6b84a":"#8b949e",borderColor:tab===id?"#e6b84a55":"#30363d"}}>
+            <button key={id} onClick={()=>setTab(id)} style={{cursor:"pointer",borderRadius:4,fontFamily:"'DM Mono',monospace",padding:"4px 12px",fontSize:11,border:`1px solid ${"#30363d"}`,background:tab===id?`${"#e6b84a"}11`:"transparent",color:tab===id?"#e6b84a":"#6e7681",borderColor:tab===id?`${"#e6b84a"}55`:"#30363d"}}>
               {lbl}
             </button>
           ))}
         </div>
 
         {tab==="chart" && (
-          <div style={{background:"#0d1117",border:"1px solid #21262d",borderRadius:6,padding:"16px 8px 12px"}}>
+          <div style={{background:"#0a0e12",border:`1px solid ${"#21262d"}`,borderRadius:6,padding:"16px 8px 12px"}}>
             <ResponsiveContainer width="100%" height={320}>
               <AreaChart data={chartData}>
                 <defs>{BUCKET_DEFS.map(b=>(
@@ -461,11 +542,11 @@ function AccumulationPhase({ initialState, onStateChange }) {
                     <stop offset="5%" stopColor={b.color} stopOpacity={0.4}/><stop offset="95%" stopColor={b.color} stopOpacity={0.04}/>
                   </linearGradient>
                 ))}</defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#161b22"/>
+                <CartesianGrid strokeDasharray="3 3" stroke={"#161b22"}/>
                 <XAxis dataKey="age" tick={{fill:"#6e7681",fontSize:10,fontFamily:"DM Mono"}} tickLine={false} axisLine={{stroke:"#30363d"}}/>
                 <YAxis tickFormatter={$M} tick={{fill:"#6e7681",fontSize:10,fontFamily:"DM Mono"}} tickLine={false} axisLine={false}/>
                 <Tooltip content={<ChartTip/>}/>
-                <ReferenceLine x={retireAge} stroke="#e6b84a44" strokeDasharray="4 2" label={{value:`Retire ${retireAge}`,fill:"#e6b84a",fontSize:9,position:"insideTopRight"}}/>
+                <ReferenceLine x={retireAge} stroke={`${"#e6b84a"}44`} strokeDasharray="4 2" label={{value:`Retire ${retireAge}`,fill:"#e6b84a",fontSize:9,position:"insideTopRight"}}/>
                 {BUCKET_DEFS.map(b=>(
                   <Area key={b.id} type="monotone" dataKey={b.label} stackId="1" stroke={b.color} strokeWidth={1.5} fill={`url(#ag${b.id})`}/>
                 ))}
@@ -475,17 +556,17 @@ function AccumulationPhase({ initialState, onStateChange }) {
         )}
 
         {tab==="table" && (
-          <div style={{background:"#0d1117",border:"1px solid #21262d",borderRadius:6,overflowX:"auto"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-              <thead><tr style={{borderBottom:"1px solid #21262d"}}>
+          <div style={{background:"#0a0e12",border:`1px solid ${"#21262d"}`,borderRadius:6,overflowX:"auto",overflowY:"auto",maxHeight:"60vh",WebkitOverflowScrolling:"touch",width:"100%"}}>
+            <table style={{borderCollapse:"collapse",fontSize:11,minWidth:"600px"}}>
+              <thead style={{position:"sticky",top:0,zIndex:2,background:"#0a0e12"}}><tr style={{borderBottom:`1px solid ${"#21262d"}`}}>
                 {["Age",...BUCKET_DEFS.map(b=>b.label),"Total","Ex-529"].map((h,i)=>(
-                  <th key={h} style={{padding:"8px 9px",textAlign:"right",fontWeight:400,whiteSpace:"nowrap",fontSize:9,letterSpacing:".05em",color:i===0?"#6e7681":i<=BUCKET_DEFS.length?BUCKET_DEFS[i-1]?.color:i===BUCKET_DEFS.length+1?"#f0f6fc":"#4a9fe6"}}>{h}</th>
+                  <th key={h} style={{padding:"8px 9px",textAlign:"right",fontWeight:400,whiteSpace:"nowrap",fontSize:9,letterSpacing:".05em",color:i===0?"#6e7681":i<=BUCKET_DEFS.length?BUCKET_DEFS[i-1] && BUCKET_DEFS[i-1].color:i===BUCKET_DEFS.length+1?"#f0f6fc":"#4a9fe6"}}>{h}</th>
                 ))}
               </tr></thead>
               <tbody>
                 {rows.map((r,i)=>(
-                  <tr key={i} style={{borderBottom:"1px solid #0d1117",background:r.age===retireAge?"#e6b84a08":i%2===0?"transparent":"#0a0e12"}}>
-                    <td style={{padding:"6px 9px",textAlign:"right",color:r.age===retireAge?"#e6b84a":"#8b949e",fontWeight:r.age===retireAge?500:400}}>{r.age}{r.age===retireAge?" ★":""}</td>
+                  <tr key={i} style={{borderBottom:`1px solid ${"#080c10"}`,background:r.age===retireAge?`${"#e6b84a"}08`:i%2===0?"transparent":"#0a0e12"}}>
+                    <td style={{padding:"6px 9px",textAlign:"right",color:r.age===retireAge?"#e6b84a":"#6e7681",fontWeight:r.age===retireAge?500:400}}>{r.age}{r.age===retireAge?" ★":""}</td>
                     {BUCKET_DEFS.map(b=>(
                       <td key={b.id} style={{padding:"6px 9px",textAlign:"right",color:r[b.id]>0?b.color:"#2d333b"}}>{r[b.id]>0?$M(r[b.id]):"—"}</td>
                     ))}
@@ -505,7 +586,7 @@ function AccumulationPhase({ initialState, onStateChange }) {
 // ══════════════════════════════════════════════════════════════
 // PHASE 2 COMPONENT
 // ══════════════════════════════════════════════════════════════
-function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) {
+function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=0 }) {
   const isMobile = useIsMobile();
   const [strat,   setStrat]   = useState('brokFirst');
   const [tabV,    setTabV]    = useState('chart');
@@ -570,34 +651,34 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
     setTimeout(()=>{setMcRes(runMC(strat,cfg,600));setMcRun(false);},50);
   },[strat,k401Init,rothInit,brokInit,cryptoInit,brokBasisPct,withdrawal,inflation,growth,ssAmount,ssStartAge,retireAge,mcStdDev]);
 
-  const tBtnStyle = id => ({cursor:"pointer",borderRadius:4,fontFamily:"'DM Mono',monospace",padding:"4px 12px",fontSize:11,border:"1px solid #30363d",background:tabV===id?"#e6b84a11":"transparent",color:tabV===id?"#e6b84a":"#8b949e",borderColor:tabV===id?"#e6b84a55":"#30363d"});
+  const tBtnStyle = id => ({cursor:"pointer",borderRadius:4,fontFamily:"'DM Mono',monospace",padding:"4px 12px",fontSize:11,border:`1px solid ${"#30363d"}`,background:tabV===id?`${"#e6b84a"}11`:"transparent",color:tabV===id?"#e6b84a":"#6e7681",borderColor:tabV===id?`${"#e6b84a"}55`:"#30363d"});
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
 
       {/* Link banner */}
-      <div style={{background: linked?"#4ae6a010":"#0d1117", border:`1px solid ${linked?"#4ae6a044":"#30363d"}`, borderRadius:6, padding:"10px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10}}>
+      <div style={{background: linked?`${"#4ae6a0"}10`:"#0a0e12", border:`1px solid ${linked?"#4ae6a0"+"44":"#30363d"}`, borderRadius:6, padding:"10px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10}}>
         <div style={{fontSize:11, color: linked?"#4ae6a0":"#6e7681"}}>
           {linked
             ? `⇠ Balances auto-linked from Phase 1 retirement (age ${retireAge}): 401k ${$M(linkedBalances.k401)} · Roth ${$M(linkedBalances.roth)} · Brokerage ${$M(linkedBalances.brok)} · Crypto ${$M(linkedBalances.crypto)}`
             : "Manual override — balances not linked to Phase 1"}
         </div>
-        <button onClick={()=>setLinked(v=>!v)} style={{cursor:"pointer",background:linked?"#4ae6a011":"transparent",border:`1px solid ${linked?"#4ae6a066":"#30363d"}`,borderRadius:4,color:linked?"#4ae6a0":"#8b949e",fontFamily:"'DM Mono',monospace",fontSize:10,padding:"4px 12px"}}>
+        <button onClick={()=>setLinked(v=>!v)} style={{cursor:"pointer",background:linked?"#4ae6a011":"transparent",border:`1px solid ${linked?"#4ae6a0"+"66":"#30363d"}`,borderRadius:4,color:linked?"#4ae6a0":"#6e7681",fontFamily:"'DM Mono',monospace",fontSize:10,padding:"4px 12px"}}>
           {linked?"Unlink (manual)":"Re-link from Phase 1"}
         </button>
       </div>
 
       {/* Settings */}
       {showCfg && (
-        <div style={{background:"#0d1117",border:"1px solid #30363d",borderRadius:6,padding:"16px 18px"}}>
-          <div style={{fontSize:9,color:"#6e7681",letterSpacing:".11em",marginBottom:10}}>STARTING BALANCES AT RETIREMENT {linked&&<span style={{color:"#4ae6a066"}}>(linked)</span>}</div>
+        <div style={{background:"#0a0e12",border:`1px solid ${"#30363d"}`,borderRadius:6,padding:"16px 18px"}}>
+          <div style={{fontSize:9,color:"#6e7681",letterSpacing:".11em",marginBottom:10}}>STARTING BALANCES AT RETIREMENT {linked&&<span style={{color:`${"#4ae6a0"}66`}}>(linked)</span>}</div>
           <div style={{display:"grid",gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",gap:10,marginBottom:16}}>
             <Field label="401(k)"    value={k401Init}   onChange={setK401}    step={10000} disabled={linked} hint={$M(k401Init)}/>
             <Field label="ROTH IRA"  value={rothInit}   onChange={setRoth}    step={5000}  disabled={linked} hint={$M(rothInit)}/>
             <Field label="BROKERAGE" value={brokInit}   onChange={setBrok}    step={10000} disabled={linked} hint={$M(brokInit)}/>
             <Field label="CRYPTO"    value={cryptoInit} onChange={setCrypto}  step={1000}  disabled={linked} hint={$M(cryptoInit)}/>
           </div>
-          <div style={{borderTop:"1px solid #1c2128",paddingTop:14,marginBottom:0}}>
+          <div style={{borderTop:`1px solid ${"#21262d"}`,paddingTop:14,marginBottom:0}}>
             <div style={{fontSize:9,color:"#6e7681",letterSpacing:".11em",marginBottom:10}}>WITHDRAWAL & GROWTH</div>
             <div style={{display:"grid",gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",gap:10}}>
               <Field label="ANNUAL WITHDRAWAL"  value={withdrawal}   onChange={setWithdrawal} step={5000}  hint="Gross yr 1 target"/>
@@ -606,14 +687,14 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
               <Field label="INFLATION %"        value={inflation}    onChange={setInflation}  prefix="%" step={0.25} hint="Withdrawal adj."/>
             </div>
           </div>
-          <div style={{borderTop:"1px solid #1c2128",paddingTop:14,marginTop:14}}>
+          <div style={{borderTop:`1px solid ${"#21262d"}`,paddingTop:14,marginTop:14}}>
             <div style={{fontSize:9,color:"#6e7681",letterSpacing:".11em",marginBottom:10}}>SS · MONTE CARLO · AFTER-TAX DISCOUNTS</div>
             <div style={{display:"grid",gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",gap:10}}>
               <Field label="COMBINED SS / YR"   value={ssAmount}   onChange={setSsAmount}   step={1000}/>
               <Field label="SS START AGE"       value={ssStartAge} onChange={setSsStartAge} prefix="" step={1} min={62} hint="62–70 · 85% taxable"/>
               <Field label="MC STD DEV %"       value={mcStdDev}   onChange={setMcStdDev}   prefix="%" step={1} hint="Annualized vol"/>
               <div style={{display:"flex",alignItems:"flex-end"}}>
-                <button onClick={doMC} disabled={mcRun} style={{cursor:"pointer",width:"100%",padding:"6px",background:"transparent",border:"1px solid #a78bfa",borderRadius:4,color:"#a78bfa",fontFamily:"'DM Mono',monospace",fontSize:11,opacity:mcRun?.6:1}}>
+                <button onClick={doMC} disabled={mcRun} style={{cursor:"pointer",width:"100%",padding:"6px",background:"transparent",border:"1px solid #a78bfa",borderRadius:4,color:"#a78bfa",fontFamily:"'DM Mono',monospace",fontSize:11,opacity:mcRun?0.6:1}}>
                   {mcRun?"Running…":"▶ Monte Carlo"}
                 </button>
               </div>
@@ -629,8 +710,8 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
       {/* Strategy cards */}
       <div style={{display:"grid",gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",gap:9}}>
         {TAX_STRATS.map(s=>(
-          <button key={s.id} onClick={()=>setStrat(s.id)} style={{cursor:"pointer",borderRadius:5,fontFamily:"'DM Mono',monospace",padding:"11px 13px",textAlign:"left",background:strat===s.id?`${s.accent}14`:"#0d1117",border:`1px solid ${strat===s.id?s.accent:"#30363d"}`,borderTop:`2px solid ${strat===s.id?s.accent:"#30363d"}`}}>
-            <div style={{color:strat===s.id?s.accent:"#8b949e",fontWeight:500,marginBottom:2,fontSize:11}}>{s.label}</div>
+          <button key={s.id} onClick={()=>setStrat(s.id)} style={{cursor:"pointer",borderRadius:5,fontFamily:"'DM Mono',monospace",padding:"11px 13px",textAlign:"left",background:strat===s.id?`${s.accent}14`:"#0a0e12",border:`1px solid ${strat===s.id?s.accent:"#30363d"}`,borderTop:`2px solid ${strat===s.id?s.accent:"#30363d"}`}}>
+            <div style={{color:strat===s.id?s.accent:"#6e7681",fontWeight:500,marginBottom:2,fontSize:11}}>{s.label}</div>
             <div style={{color:"#6e7681",fontSize:9}}>{s.sub}</div>
           </button>
         ))}
@@ -644,7 +725,7 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
           {l:"YR 1 NET INCOME",         v:$F(yr1.netIncome||0),  sub:`gross ${$M(withdrawal)}`,  c:"#f0f6fc"},
           {l:"LIFETIME LIVING TAX",     v:$M(lifeTax),           sub:`avg ${pct(avgEff)} eff.`,  c:"#e64a6e"},
         ].map((k,i)=>(
-          <div key={i} style={{background:"#0d1117",border:`1px solid ${k.hi?"#4ae6a060":"#1c2128"}`,borderTop:`2px solid ${k.c}`,borderRadius:6,padding:"11px 13px"}}>
+          <div key={i} style={{background:"#0a0e12",border:`1px solid ${k.hi?"#4ae6a0"+"60":"#21262d"}`,borderTop:`2px solid ${k.c}`,borderRadius:6,padding:"11px 13px"}}>
             <div style={{fontSize:9,color:k.hi?"#4ae6a0":"#6e7681",letterSpacing:".09em",marginBottom:5}}>{k.l}</div>
             <div style={{fontSize:16,color:k.c,fontWeight:500}}>{k.v}</div>
             <div style={{fontSize:9,color:"#6e7681",marginTop:2}}>{k.sub}</div>
@@ -653,11 +734,11 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
       </div>
 
       {/* Comparison strip */}
-      <div style={{background:"#0d1117",border:"1px solid #1c2128",borderRadius:6,padding:"13px 16px"}}>
+      <div style={{background:"#0a0e12",border:`1px solid ${"#21262d"}`,borderRadius:6,padding:"13px 16px"}}>
         <div style={{fontSize:9,color:"#6e7681",letterSpacing:".09em",marginBottom:10}}>STRATEGY COMPARISON AT AGE {retireAge+30}</div>
         <div style={{display:"grid",gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",gap: isMobile ? 12 : 0,overflowX: isMobile ? "auto" : "visible"}}>
           {comparisons.map((s,i)=>(
-            <div key={s.id} style={{borderLeft: isMobile ? "none" : i>0?"1px solid #1c2128":"none",paddingLeft:i>0?16:0,paddingRight:16}}>
+            <div key={s.id} style={{borderLeft: isMobile ? "none" : i>0?`1px solid ${"#21262d"}`:"none",paddingLeft:i>0?16:0,paddingRight:16}}>
               <div style={{fontSize:10,color:s.accent,marginBottom:7,fontWeight:500}}>{s.label}</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 10px",fontSize:11}}>
                 {[
@@ -693,7 +774,7 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
 
       {/* Chart */}
       {tabV==="chart" && (
-        <div style={{background:"#0d1117",border:"1px solid #30363d",borderRadius:6,padding:"16px 8px 12px"}}>
+        <div style={{background:"#0a0e12",border:`1px solid ${"#30363d"}`,borderRadius:6,padding:"16px 8px 12px"}}>
           <div style={{fontSize:9,color:"#6e7681",letterSpacing:".07em",marginBottom:12,paddingLeft:8}}>{TAX_STRATS.find(s=>s.id===strat).label.toUpperCase()} · BALANCES {retireAge}–{retireAge+35}</div>
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={chartData}>
@@ -702,7 +783,7 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
                   <stop offset="5%" stopColor={c} stopOpacity={0.4}/><stop offset="95%" stopColor={c} stopOpacity={0.04}/>
                 </linearGradient>
               ))}</defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#161b22"/>
+              <CartesianGrid strokeDasharray="3 3" stroke={"#161b22"}/>
               <XAxis dataKey="age" tick={{fill:"#6e7681",fontSize:10,fontFamily:"DM Mono"}} tickLine={false} axisLine={{stroke:"#30363d"}}/>
               <YAxis tickFormatter={$M} tick={{fill:"#6e7681",fontSize:10,fontFamily:"DM Mono"}} tickLine={false} axisLine={false}/>
               <Tooltip content={<ChartTip/>}/>
@@ -716,18 +797,18 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
 
       {/* Table */}
       {tabV==="table" && (
-        <div style={{background:"#0d1117",border:"1px solid #30363d",borderRadius:6,overflowX:"auto"}}>
+        <div style={{background:"#0a0e12",border:`1px solid ${"#30363d"}`,borderRadius:6,overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-            <thead><tr style={{borderBottom:"1px solid #30363d"}}>
+            <thead><tr style={{borderBottom:`1px solid ${"#30363d"}`}}>
               {["Age","Target","SS","RMD","← 401k","← Roth","← Brok.","Conv.","Living Tax","Eff %","Net Income","Gross Total","After-Tax"].map(h=>(
                 <th key={h} style={{padding:"8px 9px",textAlign:"right",color:h==="After-Tax"?"#4ae6a0":"#6e7681",fontSize:9,fontWeight:400,whiteSpace:"nowrap"}}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {rows.map((r,i)=>(
-                <tr key={i} style={{borderBottom:"1px solid #0d1117",background:r.isRmd?"#0c0a15":i%2===0?"transparent":"#0a0e12"}}>
+                <tr key={i} style={{borderBottom:`1px solid ${"#080c10"}`,background:r.isRmd?"#0c0a15":i%2===0?"transparent":"#0a0e12"}}>
                   <td style={{padding:"6px 9px",textAlign:"right",color:r.isRmd?"#a78bfa":"#e6b84a"}}>{r.age}{r.isRmd?" ⚑":""}</td>
-                  <td style={{padding:"6px 9px",textAlign:"right",color:"#8b949e"}}>{$M(r.grossSpend)}</td>
+                  <td style={{padding:"6px 9px",textAlign:"right",color:"#6e7681"}}>{$M(r.grossSpend)}</td>
                   <td style={{padding:"6px 9px",textAlign:"right",color:r.ss>0?"#4ae6a0":"#2d333b"}}>{r.ss>0?$M(r.ss):"—"}</td>
                   <td style={{padding:"6px 9px",textAlign:"right",color:r.isRmd?"#a78bfa":"#2d333b"}}>{r.isRmd?$M(r.rmd):"—"}</td>
                   <td style={{padding:"6px 9px",textAlign:"right",color:r.w401>0?"#e6b84a":"#2d333b"}}>{r.w401>0?$M(r.w401):"—"}</td>
@@ -743,7 +824,7 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
               ))}
             </tbody>
           </table>
-          <div style={{padding:"6px 12px",fontSize:9,color:"#3d444d",borderTop:"1px solid #161b22"}}>⚑ RMD year (age 73+ · IRS Uniform Lifetime Table)</div>
+          <div style={{padding:"6px 12px",fontSize:9,color:"#3d444d",borderTop:`1px solid ${"#161b22"}`}}>⚑ RMD year (age 73+ · IRS Uniform Lifetime Table)</div>
         </div>
       )}
 
@@ -751,53 +832,53 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
       {tabV==="mc" && (
         <div>
           {!mcRes && !mcRun && (
-            <div style={{background:"#0d1117",border:"1px solid #30363d",borderRadius:6,padding:"40px",textAlign:"center"}}>
-              <div style={{fontSize:12,color:"#6e7681",marginBottom:16}}>600 simulations · mean {growth}% · std dev {mcStdDev}%</div>
+            <div style={{background:"#0a0e12",border:`1px solid ${"#30363d"}`,borderRadius:6,padding:"40px",textAlign:"center"}}>
+              <div style={{fontSize:12,color:"#6e7681",marginBottom:16}}>600 tax-aware simulations · mean {growth}% · std dev {mcStdDev}% · brackets inflation-adjusted</div>
               <button onClick={doMC} style={{cursor:"pointer",background:"transparent",border:"1px solid #a78bfa",borderRadius:4,color:"#a78bfa",fontFamily:"'DM Mono',monospace",fontSize:12,padding:"8px 24px"}}>▶ Run Monte Carlo</button>
             </div>
           )}
-          {mcRun && <div style={{background:"#0d1117",border:"1px solid #30363d",borderRadius:6,padding:"40px",textAlign:"center",color:"#a78bfa"}}>Running 600 simulations…</div>}
+          {mcRun && <div style={{background:"#0a0e12",border:`1px solid ${"#30363d"}`,borderRadius:6,padding:"40px",textAlign:"center",color:"#a78bfa"}}>Running 600 simulations…</div>}
           {mcRes && !mcRun && (
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
               <div style={{display:"grid",gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",gap:9}}>
                 {[
                   {l:"SURVIVAL TO END",v:pct(mcRes.surv90),c:mcRes.surv90>.9?"#4ae6a0":mcRes.surv90>.7?"#e6b84a":"#e64a6e"},
-                  {l:`MEDIAN AT ${retireAge+30} (P50)`,v:$M(mcRes.fan.find(r=>r.age===retireAge+30)?.p50||0),c:"#a78bfa"},
-                  {l:`BEAR AT ${retireAge+30} (P10)`,  v:$M(mcRes.fan.find(r=>r.age===retireAge+30)?.p10||0),c:"#e64a6e"},
-                  {l:`BULL AT ${retireAge+30} (P90)`,  v:$M(mcRes.fan.find(r=>r.age===retireAge+30)?.p90||0),c:"#4ae6a0"},
+                  {l:`MEDIAN AT ${retireAge+30} (P50)`,v:$M((mcRes.fan.find(r=>r.age===retireAge+30)||{}).p50||0),c:"#a78bfa"},
+                  {l:`BEAR AT ${retireAge+30} (P10)`,  v:$M((mcRes.fan.find(r=>r.age===retireAge+30)||{}).p10||0),c:"#e64a6e"},
+                  {l:`BULL AT ${retireAge+30} (P90)`,  v:$M((mcRes.fan.find(r=>r.age===retireAge+30)||{}).p90||0),c:"#4ae6a0"},
                 ].map((k,i)=>(
-                  <div key={i} style={{background:"#0d1117",border:"1px solid #1c2128",borderTop:`2px solid ${k.c}`,borderRadius:6,padding:"11px 13px"}}>
+                  <div key={i} style={{background:"#0a0e12",border:`1px solid ${"#21262d"}`,borderTop:`2px solid ${k.c}`,borderRadius:6,padding:"11px 13px"}}>
                     <div style={{fontSize:9,color:"#6e7681",marginBottom:5}}>{k.l}</div>
                     <div style={{fontSize:16,color:k.c,fontWeight:500}}>{k.v}</div>
                   </div>
                 ))}
               </div>
-              <div style={{background:"#0d1117",border:"1px solid #30363d",borderRadius:6,padding:"16px 8px 12px"}}>
-                <div style={{fontSize:9,color:"#6e7681",letterSpacing:".07em",marginBottom:12,paddingLeft:8}}>FAN CHART · P10 / P25 / P50 / P75 / P90</div>
+              <div style={{background:"#0a0e12",border:`1px solid ${"#30363d"}`,borderRadius:6,padding:"16px 8px 12px"}}>
+                <div style={{fontSize:9,color:"#6e7681",letterSpacing:".07em",marginBottom:12,paddingLeft:8}}>AFTER-TAX PORTFOLIO · FAN CHART · P10 / P25 / P50 / P75 / P90</div>
                 <ResponsiveContainer width="100%" height={300}>
                   <AreaChart data={mcRes.fan}>
                     <defs>
-                      <linearGradient id="mc90" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#a78bfa" stopOpacity={0.15}/><stop offset="100%" stopColor="#a78bfa" stopOpacity={0.02}/></linearGradient>
-                      <linearGradient id="mc75" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#a78bfa" stopOpacity={0.2}/><stop offset="100%" stopColor="#a78bfa" stopOpacity={0.04}/></linearGradient>
+                      <linearGradient id="mc90" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={"#a78bfa"} stopOpacity={0.15}/><stop offset="100%" stopColor={"#a78bfa"} stopOpacity={0.02}/></linearGradient>
+                      <linearGradient id="mc75" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={"#a78bfa"} stopOpacity={0.2}/><stop offset="100%" stopColor={"#a78bfa"} stopOpacity={0.04}/></linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#161b22"/>
+                    <CartesianGrid strokeDasharray="3 3" stroke={"#161b22"}/>
                     <XAxis dataKey="age" tick={{fill:"#6e7681",fontSize:10,fontFamily:"DM Mono"}} tickLine={false} axisLine={{stroke:"#30363d"}}/>
                     <YAxis tickFormatter={$M} tick={{fill:"#6e7681",fontSize:10,fontFamily:"DM Mono"}} tickLine={false} axisLine={false}/>
                     <Tooltip content={({active,payload,label})=>{
-                      if(!active||!payload?.length)return null;
+                      if(!active||!payload || !payload.length)return null;
                       const d=mcRes.fan.find(r=>r.age===label)||{};
-                      return(<div style={{background:"#0d1117",border:"1px solid #30363d",borderRadius:5,padding:"10px 14px",fontSize:11,fontFamily:"DM Mono"}}>
+                      return(<div style={{background:"#0a0e12",border:`1px solid ${"#30363d"}`,borderRadius:5,padding:"10px 14px",fontSize:11,fontFamily:"DM Mono"}}>
                         <div style={{color:"#e6b84a",marginBottom:6}}>Age {label}</div>
                         {[["P90","#4ae6a0",d.p90],["P75","#a78bfa",d.p75],["P50","#f0f6fc",d.p50],["P25","#e6b84a",d.p25],["P10","#e64a6e",d.p10]].map(([n,c,v])=>(
                           <div key={n} style={{color:c,marginBottom:2}}>{n}: {$M(v||0)}</div>
                         ))}
                       </div>);
                     }}/>
-                    <Area type="monotone" dataKey="p90" stroke="#4ae6a0" strokeWidth={1} strokeDasharray="4 2" fill="url(#mc90)"/>
-                    <Area type="monotone" dataKey="p75" stroke="#a78bfa" strokeWidth={1} fill="url(#mc75)"/>
-                    <Area type="monotone" dataKey="p50" stroke="#f0f6fc" strokeWidth={2} fill="none"/>
-                    <Area type="monotone" dataKey="p25" stroke="#e6b84a" strokeWidth={1} fill="none"/>
-                    <Area type="monotone" dataKey="p10" stroke="#e64a6e" strokeWidth={1} strokeDasharray="4 2" fill="none"/>
+                    <Area type="monotone" dataKey="p90" stroke={"#4ae6a0"} strokeWidth={1} strokeDasharray="4 2" fill="url(#mc90)"/>
+                    <Area type="monotone" dataKey="p75" stroke={"#a78bfa"} strokeWidth={1} fill="url(#mc75)"/>
+                    <Area type="monotone" dataKey="p50" stroke={"#f0f6fc"} strokeWidth={2} fill="none"/>
+                    <Area type="monotone" dataKey="p25" stroke={"#e6b84a"} strokeWidth={1} fill="none"/>
+                    <Area type="monotone" dataKey="p10" stroke={"#e64a6e"} strokeWidth={1} strokeDasharray="4 2" fill="none"/>
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -831,33 +912,72 @@ const BLANK_STATE = {
 export default function App() {
   const isMobile = useIsMobile();
   const [phase,     setPhase]    = useState(1);
+
+  // iOS zoom reset: when user leaves an input, snap viewport back to normal scale
+  useEffect(() => {
+    if (!isMobile) return;
+    // Ensure viewport meta exists
+    let viewport = document.querySelector('meta[name=viewport]');
+    if (!viewport) {
+      viewport = document.createElement('meta');
+      viewport.name = 'viewport';
+      document.head.appendChild(viewport);
+    }
+    viewport.setAttribute('content', 'width=device-width, initial-scale=1');
+
+    const resetZoom = () => {
+      // Temporarily set maximum-scale=1 to snap back, then remove restriction
+      viewport.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1');
+      setTimeout(() => {
+        viewport.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=5');
+      }, 300);
+    };
+    document.addEventListener('focusout', resetZoom);
+    return () => document.removeEventListener('focusout', resetZoom);
+  }, [isMobile]);
   const [accumState, setAccumState] = useState(INIT_STATE);
   const [loaded,    setLoaded]   = useState(false);
   const [saveStatus,setSaveStatus]= useState("");
   const [clearKey,  setClearKey]  = useState(0);
 
   // Load
-  useEffect(()=>{
-    (async()=>{
-      try{const raw=localStorage.getItem('rp_state');if(raw){const s=JSON.parse(raw);if(s.accumState)setAccumState(s.accumState);if(s.phase)setPhase(s.phase);}}
-      catch(_){}
-      setLoaded(true);
-    })();
-  },[]);
+  const SAVE_VERSION = 2; // bump this whenever defaults change
 
-  // Save
+  // Load saved state on mount
   useEffect(()=>{
-    if(!loaded)return;
-    (async()=>{
-      try{localStorage.setItem('rp_state',JSON.stringify({accumState,phase}));setSaveStatus("saved");setTimeout(()=>setSaveStatus(""),1500);}
-      catch(_){}
-    })();
-  },[accumState,phase,loaded]);
+    try {
+      const raw = localStorage.getItem('rp_state');
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s.version === SAVE_VERSION && s.accumState) {
+          setAccumState(s.accumState);
+          if (s.phase) setPhase(s.phase);
+          setClearKey(k => k + 1);
+        } else {
+          localStorage.removeItem('rp_state');
+        }
+      }
+    } catch(_) {}
+    setLoaded(true);
+  }, []);
+
+  // Save on every change (after initial load)
+  useEffect(()=>{
+    if (!loaded) return;
+    try {
+      localStorage.setItem('rp_state', JSON.stringify({version: SAVE_VERSION, accumState, phase}));
+      setSaveStatus("saved");
+      setTimeout(()=>setSaveStatus(""), 1500);
+    } catch(_) {}
+  },[accumState, phase, loaded]);
 
   const handleClear = async () => {
-    setAccumState(JSON.parse(JSON.stringify(BLANK_STATE)));setPhase(1);setClearKey(k=>k+1);
-    try{localStorage.removeItem('rp_state');}catch(_){}
-    setSaveStatus("cleared");setTimeout(()=>setSaveStatus(""),2000);
+    setAccumState(JSON.parse(JSON.stringify(BLANK_STATE)));
+    setPhase(1);
+    setClearKey(k => k + 1);
+    try { localStorage.removeItem('rp_state'); } catch(_) {}
+    setSaveStatus("cleared");
+    setTimeout(()=>setSaveStatus(""), 2000);
   };
 
   // Compute linked balances from accumulation output
@@ -873,24 +993,25 @@ export default function App() {
   };
 
   return (
-    <div style={{minHeight:"100vh",background:"#080c10",color:"#c9d1d9",fontFamily:"'DM Mono','Courier New',monospace",padding: isMobile ? "16px 12px" : "24px 18px"}}>
+    <div style={{minHeight:"100vh",background:"#080c10",color:"#c9d1d9",fontFamily:"'DM Mono','Courier New',monospace",padding: isMobile ? "16px 12px" : "24px 18px",overflowX:"hidden",'--scrolltrack':"#0a0e12",'--scrollthumb':"#30363d"}}>
       <style>{`
         * { box-sizing:border-box; }
         input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;}
-        input[type=number]{-moz-appearance:textfield;}
+        input[type=number]{-moz-appearance:textfield; font-size:16px !important;}
         input:focus{border-color:#e6b84a88!important;box-shadow:0 0 0 2px #e6b84a22;}
         ::-webkit-scrollbar{width:5px;height:5px;}
         ::-webkit-scrollbar-track{background:#0d1117;}
         ::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px;}
         button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
-        input{touch-action:manipulation;}
+        input{touch-action:manipulation; font-size:16px !important;}
         @media(max-width:768px){
           table{font-size:10px !important;}
           th,td{padding:5px 6px !important;}
+          input, select, textarea { font-size:16px !important; }
         }
       `}</style>
 
-      <div style={{maxWidth:1200,margin:"0 auto"}}>
+      <div style={{maxWidth:1200,margin:"0 auto",overflow:"hidden"}}>
         {/* Header */}
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:10}}>
           <div>
@@ -902,12 +1023,12 @@ export default function App() {
           <div style={{display:"flex",alignItems:"center",gap:10,marginTop:4}}>
             {saveStatus==="saved"   && <span style={{fontSize:10,color:"#4ae6a0"}}>✓ Saved</span>}
             {saveStatus==="cleared" && <span style={{fontSize:10,color:"#e64a6e"}}>✓ Reset</span>}
-            <button onClick={handleClear} style={{cursor:"pointer",background:"transparent",border:"1px solid #e64a6e55",borderRadius:4,color:"#e64a6e",fontFamily:"'DM Mono',monospace",fontSize:11,padding:"5px 13px"}}>✕ Clear</button>
+            <button onClick={handleClear} style={{cursor:"pointer",background:"transparent",border:`1px solid ${"#e64a6e"}55`,borderRadius:4,color:"#e64a6e",fontFamily:"'DM Mono',monospace",fontSize:11,padding:"5px 13px"}}>✕ Clear</button>
           </div>
         </div>
 
         {/* Phase tabs */}
-        <div style={{display:"flex",gap:0,marginBottom:20,borderBottom:"1px solid #21262d"}}>
+        <div style={{display:"flex",gap:0,marginBottom:20,borderBottom:`1px solid ${"#21262d"}`}}>
           {[
             [1,"Phase 1","Accumulation","Age "+accumState.currentAge+" → "+accumState.retireAge,"#4ae6a0"],
             [2,"Phase 2","Retirement Tax Strategy","Age "+accumState.retireAge+" → 90","#e6b84a"],
@@ -926,7 +1047,7 @@ export default function App() {
                   <div style={{fontSize:9,color:"#3d444d"}}>HANDOFF AT {accumState.retireAge}</div>
                   <div style={{display:"flex",gap:6}}>
                     {[["401k",linkedBalances.k401,"#e6b84a"],["Roth",linkedBalances.roth,"#4a9fe6"],["Brok",linkedBalances.brok,"#4ae6a0"],["Crypto",linkedBalances.crypto,"#e64a6e"]].map(([l,v,c])=>(
-                      <div key={l} style={{textAlign:"center",background:"#0d1117",border:`1px solid ${c}33`,borderRadius:4,padding:"4px 8px"}}>
+                      <div key={l} style={{textAlign:"center",background:"#0a0e12",border:`1px solid ${c}33`,borderRadius:4,padding:"4px 8px"}}>
                         <div style={{fontSize:8,color:c}}>{l}</div>
                         <div style={{fontSize:10,color:"#f0f6fc"}}>{$M(v)}</div>
                       </div>
@@ -934,15 +1055,18 @@ export default function App() {
                   </div>
                 </>
               )}
-              <button onClick={()=>setPhase(2)} style={{cursor:"pointer",background:"#e6b84a11",border:"1px solid #e6b84a55",borderRadius:4,color:"#e6b84a",fontFamily:"'DM Mono',monospace",fontSize:10,padding:"5px 12px",whiteSpace:"nowrap"}}>
+              <button onClick={()=>setPhase(2)} style={{cursor:"pointer",background:`${"#e6b84a"}11`,border:"1px solid #e6b84a55",borderRadius:4,color:"#e6b84a",fontFamily:"'DM Mono',monospace",fontSize:10,padding:"5px 12px",whiteSpace:"nowrap"}}>
                 {isMobile ? "Phase 2 →" : "Use in Phase 2 →"}
               </button>
             </div>
           )}
         </div>
 
-        {phase===1 && <AccumulationPhase key={clearKey} initialState={accumState} onStateChange={setAccumState}/>}
-        {phase===2 && <RetirementPhase key={clearKey} linkedBalances={linkedBalances} retireAge={accumState.retireAge} initWithdrawal={clearKey===0?200_000:0}/>}
+        {phase===1 && (loaded
+          ? <AccumulationPhase key={clearKey} initialState={accumState} onStateChange={setAccumState}/>
+          : <div style={{padding:"40px",textAlign:"center",color:"#6e7681",fontSize:12}}>Loading…</div>
+        )}
+        {phase===2 && <RetirementPhase key={clearKey} linkedBalances={linkedBalances} retireAge={accumState.retireAge} initWithdrawal={0}/>}
       </div>
     </div>
   );
