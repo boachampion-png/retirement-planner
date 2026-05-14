@@ -3,6 +3,21 @@ import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
 // ══════════════════════════════════════════════════════════════
+// RESPONSIVE HOOK
+// ══════════════════════════════════════════════════════════════
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  );
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+  return isMobile;
+}
+
+// ══════════════════════════════════════════════════════════════
 // SHARED HELPERS
 // ══════════════════════════════════════════════════════════════
 const $M  = n => n >= 1e6 ? `$${(n/1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n/1e3).toFixed(0)}K` : `$${Math.round(n)}`;
@@ -15,8 +30,9 @@ function Inp({ value, onChange, prefix, suffix, step=100, min=0 }) {
       {prefix && <span style={{ position:"absolute", left:7, top:"50%", transform:"translateY(-50%)", color:"#6e7681", fontSize:11, pointerEvents:"none", zIndex:1 }}>{prefix}</span>}
       <input type="number" value={value} step={step} min={min} onChange={e => onChange(Number(e.target.value))}
         style={{ width:"100%", background:"#080c10", border:"1px solid #21262d", borderRadius:3,
-                 color:"#e6b84a", fontFamily:"'DM Mono',monospace", fontSize:11,
-                 padding: prefix ? "4px 6px 4px 18px" : suffix ? "4px 22px 4px 6px" : "4px 6px", outline:"none" }} />
+                 color:"#e6b84a", fontFamily:"'DM Mono',monospace", fontSize:14,
+                 padding: prefix ? "8px 6px 8px 18px" : suffix ? "8px 22px 8px 6px" : "8px 6px", outline:"none",
+                 WebkitAppearance:"none", touchAction:"manipulation" }} />
       {suffix && <span style={{ position:"absolute", right:7, top:"50%", transform:"translateY(-50%)", color:"#6e7681", fontSize:11, pointerEvents:"none" }}>{suffix}</span>}
     </div>
   );
@@ -31,8 +47,9 @@ function Field({ label, value, onChange, prefix="$", step=1000, min=0, hint, dis
         <input type="number" value={value} step={step} min={min} disabled={disabled}
           onChange={e => onChange(Number(e.target.value))}
           style={{ width:"100%", background: disabled ? "#060809" : "#0a0e12", border:"1px solid #30363d", borderRadius:4,
-                   color: disabled ? "#4d5563" : "#e6b84a", fontFamily:"'DM Mono',monospace", fontSize:12,
-                   padding: prefix ? "6px 8px 6px 20px" : "6px 8px", outline:"none" }} />
+                   color: disabled ? "#4d5563" : "#e6b84a", fontFamily:"'DM Mono',monospace", fontSize:14,
+                   padding: prefix ? "10px 8px 10px 20px" : "10px 8px", outline:"none",
+                   WebkitAppearance:"none", touchAction:"manipulation" }} />
       </div>
       {hint && <div style={{ fontSize:9, color:"#3d444d", marginTop:1 }}>{hint}</div>}
     </div>
@@ -119,7 +136,7 @@ function accumSimulate(buckets, currentAge, retireAge, lumpSums={}) {
   return rows;
 }
 
-function BucketCard({ def, data, onChange, showAll }) {
+function BucketCard({ def, data, onChange, showAll, isMobile=false }) {
   const [open, setOpen] = useState(true);
   useEffect(() => { setOpen(showAll); }, [showAll]);
   const set = (path, val) => {
@@ -142,13 +159,13 @@ function BucketCard({ def, data, onChange, showAll }) {
       </button>
       {open && (
         <div style={{ padding:"0 13px 13px", borderTop:"1px solid #161b22" }}>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginTop:10, marginBottom:10 }}>
+          <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap:8, marginTop:10, marginBottom:10 }}>
             <div><div style={{ fontSize:8, color:"#6e7681", marginBottom:3 }}>BALANCE</div><Inp value={data.balance} onChange={v=>set("balance",v)} prefix="$" step={1000}/></div>
             <div><div style={{ fontSize:8, color:"#6e7681", marginBottom:3 }}>GROWTH %</div><Inp value={data.growthRate} onChange={v=>set("growthRate",v)} suffix="%" step={0.5}/></div>
             <div><div style={{ fontSize:8, color:"#6e7681", marginBottom:3 }}>BASIS %</div><Inp value={data.basisPct} onChange={v=>set("basisPct",v)} suffix="%" step={1}/></div>
           </div>
           <div style={{ fontSize:8, color:"#6e7681", marginBottom:5, letterSpacing:".08em" }}>CONTRIBUTIONS</div>
-          <div style={{ display:"grid", gridTemplateColumns:"55px 1fr 1fr 1fr", gap:"3px 6px", alignItems:"center" }}>
+          <div style={{ display:"grid", gridTemplateColumns: isMobile ? "50px 1fr 1fr 1fr" : "55px 1fr 1fr 1fr", gap: isMobile ? "6px 5px" : "3px 6px", alignItems:"center" }}>
             <div style={{ fontSize:8, color:"#3d444d" }}></div>
             {["AMOUNT","START","END"].map(h=><div key={h} style={{ fontSize:8, color:"#3d444d", textAlign:"center" }}>{h}</div>)}
             {[{key:"weekly",lbl:"Weekly"},{key:"monthly",lbl:"Monthly"},{key:"annually",lbl:"Annual"}].map(({key,lbl})=>(
@@ -282,6 +299,7 @@ const ACCT_C={k401:'#e6b84a',roth:'#4a9fe6',brokerage:'#4ae6a0',crypto:'#e64a6e'
 // PHASE 1 COMPONENT
 // ══════════════════════════════════════════════════════════════
 function AccumulationPhase({ initialState, onStateChange }) {
+  const isMobile = useIsMobile();
   // Own state locally — remounting (via clearKey) starts fresh from initialState
   const [localState, setLocalState] = useState(() => JSON.parse(JSON.stringify(initialState)));
   const { currentAge, retireAge, buckets, lumpSums, showAll, lumpOpen } = localState;
@@ -333,7 +351,7 @@ function AccumulationPhase({ initialState, onStateChange }) {
   const [tab, setTab] = useState('chart');
 
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"310px 1fr", gap:16 }}>
+    <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "310px 1fr", gap:16 }}>
       {/* Left */}
       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
         <div style={{ background:"#0d1117", border:"1px solid #21262d", borderRadius:6, padding:"13px 14px" }}>
@@ -357,7 +375,7 @@ function AccumulationPhase({ initialState, onStateChange }) {
         </div>
 
         {BUCKET_DEFS.map(def => (
-          <BucketCard key={def.id} def={def} data={buckets[def.id]} onChange={d=>updateBucket(def.id,d)} showAll={showAll}/>
+          <BucketCard key={def.id} def={def} data={buckets[def.id]} onChange={d=>updateBucket(def.id,d)} showAll={showAll} isMobile={isMobile}/>
         ))}
 
         {/* Lump sums */}
@@ -396,7 +414,7 @@ function AccumulationPhase({ initialState, onStateChange }) {
 
       {/* Right */}
       <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8 }}>
+        <div style={{ display:"grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(5,1fr)", gap:8 }}>
           {[
             {l:"TODAY",           v:$M(totalNow),                                              sub:"starting portfolio",       c:"#e6b84a"},
             {l:`AT ${retireAge}`, v:$M(totalRetire),                                           sub:"projected total",          c:"#4ae6a0"},
@@ -415,7 +433,7 @@ function AccumulationPhase({ initialState, onStateChange }) {
         {/* Bucket balances at retire */}
         <div style={{background:"#0d1117",border:"1px solid #21262d",borderRadius:6,padding:"12px 14px"}}>
           <div style={{fontSize:9,color:"#6e7681",letterSpacing:".09em",marginBottom:10}}>BALANCES AT RETIREMENT (AGE {retireAge})</div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
+          <div style={{display:"grid",gridTemplateColumns: isMobile ? "repeat(4,1fr)" : "repeat(7,1fr)",gap:6}}>
             {BUCKET_DEFS.map(b=>(
               <div key={b.id} style={{textAlign:"center"}}>
                 <div style={{fontSize:8,color:b.color,marginBottom:3}}>{b.label.toUpperCase()}</div>
@@ -488,6 +506,7 @@ function AccumulationPhase({ initialState, onStateChange }) {
 // PHASE 2 COMPONENT
 // ══════════════════════════════════════════════════════════════
 function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) {
+  const isMobile = useIsMobile();
   const [strat,   setStrat]   = useState('brokFirst');
   const [tabV,    setTabV]    = useState('chart');
   const [showCfg, setShowCfg] = useState(true);
@@ -572,7 +591,7 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
       {showCfg && (
         <div style={{background:"#0d1117",border:"1px solid #30363d",borderRadius:6,padding:"16px 18px"}}>
           <div style={{fontSize:9,color:"#6e7681",letterSpacing:".11em",marginBottom:10}}>STARTING BALANCES AT RETIREMENT {linked&&<span style={{color:"#4ae6a066"}}>(linked)</span>}</div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
+          <div style={{display:"grid",gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",gap:10,marginBottom:16}}>
             <Field label="401(k)"    value={k401Init}   onChange={setK401}    step={10000} disabled={linked} hint={$M(k401Init)}/>
             <Field label="ROTH IRA"  value={rothInit}   onChange={setRoth}    step={5000}  disabled={linked} hint={$M(rothInit)}/>
             <Field label="BROKERAGE" value={brokInit}   onChange={setBrok}    step={10000} disabled={linked} hint={$M(brokInit)}/>
@@ -580,7 +599,7 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
           </div>
           <div style={{borderTop:"1px solid #1c2128",paddingTop:14,marginBottom:0}}>
             <div style={{fontSize:9,color:"#6e7681",letterSpacing:".11em",marginBottom:10}}>WITHDRAWAL & GROWTH</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",gap:10}}>
               <Field label="ANNUAL WITHDRAWAL"  value={withdrawal}   onChange={setWithdrawal} step={5000}  hint="Gross yr 1 target"/>
               <Field label="BROKERAGE BASIS %"  value={brokBasisPct} onChange={setBrokBasis}  prefix="%" step={1} disabled={linked} hint={`${brokBasisPct.toFixed(0)}% is cost basis`}/>
               <Field label="PORTFOLIO GROWTH %" value={growth}       onChange={setGrowth}     prefix="%" step={0.5} hint="Nominal annual return"/>
@@ -589,7 +608,7 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
           </div>
           <div style={{borderTop:"1px solid #1c2128",paddingTop:14,marginTop:14}}>
             <div style={{fontSize:9,color:"#6e7681",letterSpacing:".11em",marginBottom:10}}>SS · MONTE CARLO · AFTER-TAX DISCOUNTS</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",gap:10}}>
               <Field label="COMBINED SS / YR"   value={ssAmount}   onChange={setSsAmount}   step={1000}/>
               <Field label="SS START AGE"       value={ssStartAge} onChange={setSsStartAge} prefix="" step={1} min={62} hint="62–70 · 85% taxable"/>
               <Field label="MC STD DEV %"       value={mcStdDev}   onChange={setMcStdDev}   prefix="%" step={1} hint="Annualized vol"/>
@@ -599,7 +618,7 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
                 </button>
               </div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginTop:10}}>
+            <div style={{display:"grid",gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",gap:10,marginTop:10}}>
               <Field label="401k FUTURE TAX %"  value={k401Disc}  onChange={setK401Disc} prefix="%" step={1} hint="After-tax 401k discount"/>
               <Field label="LTCG RATE %"        value={ltcgDisc}  onChange={setLtcgDisc} prefix="%" step={1} hint="Brok/crypto gain discount"/>
             </div>
@@ -608,7 +627,7 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
       )}
 
       {/* Strategy cards */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:9}}>
+      <div style={{display:"grid",gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",gap:9}}>
         {TAX_STRATS.map(s=>(
           <button key={s.id} onClick={()=>setStrat(s.id)} style={{cursor:"pointer",borderRadius:5,fontFamily:"'DM Mono',monospace",padding:"11px 13px",textAlign:"left",background:strat===s.id?`${s.accent}14`:"#0d1117",border:`1px solid ${strat===s.id?s.accent:"#30363d"}`,borderTop:`2px solid ${strat===s.id?s.accent:"#30363d"}`}}>
             <div style={{color:strat===s.id?s.accent:"#8b949e",fontWeight:500,marginBottom:2,fontSize:11}}>{s.label}</div>
@@ -618,7 +637,7 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
       </div>
 
       {/* KPIs */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:9}}>
+      <div style={{display:"grid",gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",gap:9}}>
         {[
           {l:`GROSS AT ${retireAge+30}`, v:$M(at85.total||0),    sub:`from ${$M(totalStart)}`,   c:accent},
           {l:`AFTER-TAX AT ${retireAge+30}`,v:$M(afterTax(at85)),sub:`401k @${k401Disc}% · LTCG @${ltcgDisc}%`, c:"#4ae6a0",hi:true},
@@ -636,9 +655,9 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
       {/* Comparison strip */}
       <div style={{background:"#0d1117",border:"1px solid #1c2128",borderRadius:6,padding:"13px 16px"}}>
         <div style={{fontSize:9,color:"#6e7681",letterSpacing:".09em",marginBottom:10}}>STRATEGY COMPARISON AT AGE {retireAge+30}</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)"}}>
+        <div style={{display:"grid",gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",gap: isMobile ? 12 : 0,overflowX: isMobile ? "auto" : "visible"}}>
           {comparisons.map((s,i)=>(
-            <div key={s.id} style={{borderLeft:i>0?"1px solid #1c2128":"none",paddingLeft:i>0?16:0,paddingRight:16}}>
+            <div key={s.id} style={{borderLeft: isMobile ? "none" : i>0?"1px solid #1c2128":"none",paddingLeft:i>0?16:0,paddingRight:16}}>
               <div style={{fontSize:10,color:s.accent,marginBottom:7,fontWeight:500}}>{s.label}</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 10px",fontSize:11}}>
                 {[
@@ -740,7 +759,7 @@ function RetirementPhase({ linkedBalances, retireAge, initWithdrawal=200_000 }) 
           {mcRun && <div style={{background:"#0d1117",border:"1px solid #30363d",borderRadius:6,padding:"40px",textAlign:"center",color:"#a78bfa"}}>Running 600 simulations…</div>}
           {mcRes && !mcRun && (
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:9}}>
+              <div style={{display:"grid",gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",gap:9}}>
                 {[
                   {l:"SURVIVAL TO END",v:pct(mcRes.surv90),c:mcRes.surv90>.9?"#4ae6a0":mcRes.surv90>.7?"#e6b84a":"#e64a6e"},
                   {l:`MEDIAN AT ${retireAge+30} (P50)`,v:$M(mcRes.fan.find(r=>r.age===retireAge+30)?.p50||0),c:"#a78bfa"},
@@ -809,7 +828,8 @@ const BLANK_STATE = {
   lumpSums: {}, showAll: true, lumpOpen: true,
 };
 
-export default function Page() {
+export default function App() {
+  const isMobile = useIsMobile();
   const [phase,     setPhase]    = useState(1);
   const [accumState, setAccumState] = useState(INIT_STATE);
   const [loaded,    setLoaded]   = useState(false);
@@ -853,16 +873,21 @@ export default function Page() {
   };
 
   return (
-    <div style={{minHeight:"100vh",background:"#080c10",color:"#c9d1d9",fontFamily:"'DM Mono','Courier New',monospace",padding:"24px 18px"}}>
+    <div style={{minHeight:"100vh",background:"#080c10",color:"#c9d1d9",fontFamily:"'DM Mono','Courier New',monospace",padding: isMobile ? "16px 12px" : "24px 18px"}}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Playfair+Display:wght@700&display=swap');
         * { box-sizing:border-box; }
         input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;}
         input[type=number]{-moz-appearance:textfield;}
-        input:focus{border-color:#e6b84a88!important;}
+        input:focus{border-color:#e6b84a88!important;box-shadow:0 0 0 2px #e6b84a22;}
         ::-webkit-scrollbar{width:5px;height:5px;}
         ::-webkit-scrollbar-track{background:#0d1117;}
         ::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px;}
+        button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
+        input{touch-action:manipulation;}
+        @media(max-width:768px){
+          table{font-size:10px !important;}
+          th,td{padding:5px 6px !important;}
+        }
       `}</style>
 
       <div style={{maxWidth:1200,margin:"0 auto"}}>
@@ -896,17 +921,21 @@ export default function Page() {
           {/* Handoff indicator */}
           {retireRow.total > 0 && (
             <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8,paddingRight:4}}>
-              <div style={{fontSize:9,color:"#3d444d"}}>HANDOFF AT {accumState.retireAge}</div>
-              <div style={{display:"flex",gap:6}}>
-                {[["401k",linkedBalances.k401,"#e6b84a"],["Roth",linkedBalances.roth,"#4a9fe6"],["Brok",linkedBalances.brok,"#4ae6a0"],["Crypto",linkedBalances.crypto,"#e64a6e"]].map(([l,v,c])=>(
-                  <div key={l} style={{textAlign:"center",background:"#0d1117",border:`1px solid ${c}33`,borderRadius:4,padding:"4px 8px"}}>
-                    <div style={{fontSize:8,color:c}}>{l}</div>
-                    <div style={{fontSize:10,color:"#f0f6fc"}}>{$M(v)}</div>
+              {!isMobile && (
+                <>
+                  <div style={{fontSize:9,color:"#3d444d"}}>HANDOFF AT {accumState.retireAge}</div>
+                  <div style={{display:"flex",gap:6}}>
+                    {[["401k",linkedBalances.k401,"#e6b84a"],["Roth",linkedBalances.roth,"#4a9fe6"],["Brok",linkedBalances.brok,"#4ae6a0"],["Crypto",linkedBalances.crypto,"#e64a6e"]].map(([l,v,c])=>(
+                      <div key={l} style={{textAlign:"center",background:"#0d1117",border:`1px solid ${c}33`,borderRadius:4,padding:"4px 8px"}}>
+                        <div style={{fontSize:8,color:c}}>{l}</div>
+                        <div style={{fontSize:10,color:"#f0f6fc"}}>{$M(v)}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <button onClick={()=>setPhase(2)} style={{cursor:"pointer",background:"#e6b84a11",border:"1px solid #e6b84a55",borderRadius:4,color:"#e6b84a",fontFamily:"'DM Mono',monospace",fontSize:10,padding:"5px 12px"}}>
-                Use in Phase 2 →
+                </>
+              )}
+              <button onClick={()=>setPhase(2)} style={{cursor:"pointer",background:"#e6b84a11",border:"1px solid #e6b84a55",borderRadius:4,color:"#e6b84a",fontFamily:"'DM Mono',monospace",fontSize:10,padding:"5px 12px",whiteSpace:"nowrap"}}>
+                {isMobile ? "Phase 2 →" : "Use in Phase 2 →"}
               </button>
             </div>
           )}
