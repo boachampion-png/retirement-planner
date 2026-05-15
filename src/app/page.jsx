@@ -1260,10 +1260,8 @@ function ScenarioBuilderPhase({linkedBalances,retireAge,sharedSettings={},onSett
   const isMobile = useIsMobile();
   const retAge = retireAge || 55;
   const hasBalances = (linkedBalances.k401||0)+(linkedBalances.roth||0)+(linkedBalances.brok||0) > 0;
-  // Use linked balances if available, otherwise show example balances
-  const effectiveBalances = hasBalances ? linkedBalances : {
-    k401:3_500_000, roth:390_000, brok:2_500_000, crypto:52_000, brokBasisPct:63
-  };
+  // Always use actual linked balances — zeros when Phase 1 is empty
+  const effectiveBalances = linkedBalances;
 
   // ── The two dials ──────────────────────────────────────────
   // Dial 1: 0 = pure brokerage first (slow 401k draw)
@@ -1272,16 +1270,24 @@ function ScenarioBuilderPhase({linkedBalances,retireAge,sharedSettings={},onSett
   // Dial 2: 0 = no conversions, 100 = max affordable conversions
   const [convLevel,  setConvLevel]  = useState(0); // annual $ conversion target
   // Spending & assumptions
-  const [withdrawal, setWithdrawal] = useState(250000);
-  const [inflation,  setInflation]  = useState(3);
-  const [growth,     setGrowth]     = useState(7);
-  const [ssAmount,   setSsAmount]   = useState(0);
-  const [ssStartAge, setSsStartAge] = useState(67);
+
   const [k401Disc,   setK401Disc]   = useState(25);
   const [open1, setOpen1] = useState(true);
   const [open2, setOpen2] = useState(true);
   const [open3, setOpen3] = useState(true);
   const [selfFunded, setSelfFunded] = useState(false);
+
+  // Spending — from shared App state so Clear resets them
+  const withdrawal  = sharedSettings.withdrawal  !== undefined ? sharedSettings.withdrawal  : 250000;
+  const inflation   = sharedSettings.inflation   !== undefined ? sharedSettings.inflation   : 3;
+  const growth      = sharedSettings.growth      !== undefined ? sharedSettings.growth      : 7;
+  const ssAmount    = sharedSettings.ssAmount    !== undefined ? sharedSettings.ssAmount    : 0;
+  const ssStartAge  = sharedSettings.ssStartAge  !== undefined ? sharedSettings.ssStartAge  : 67;
+  const setWithdrawal  = onSettingsChange.setWithdrawal  || (()=>{});
+  const setInflation   = onSettingsChange.setInflation   || (()=>{});
+  const setGrowth      = onSettingsChange.setGrowth      || (()=>{});
+  const setSsAmount    = onSettingsChange.setSsAmount    || (()=>{});
+  const setSsStartAge  = onSettingsChange.setSsStartAge  || (()=>{});
 
   // ── Simulation (calls module-level function with all params) ─
 
@@ -1967,6 +1973,12 @@ export default function App() {
     setAccumState(JSON.parse(JSON.stringify(BLANK_STATE)));
     setPhase(1);
     setClearKey(k => k + 1);
+    // Reset shared scenario settings
+    setSharedWithdrawal(250000);
+    setSharedGrowth(7);
+    setSharedInflation(3);
+    setSharedSS(0);
+    setSharedSSAge(67);
     try { localStorage.removeItem('rp_state'); } catch(_) {}
     setSaveStatus("cleared");
     setTimeout(()=>setSaveStatus(""), 2000);
